@@ -54,12 +54,21 @@ def delete(key):
         del INDEX[key]
 
 
-# --- TEST ---
+# --- TEST WITH PEPE ---
 if __name__ == "__main__":
     build_index()  # Build index on startup
     
+    # 1. Test team
     set("team", "Alejandro, Gabriel, Jorge")
     print("Get team:", get("team"))
     
-    delete("team")
-    print("Get team after delete:", get("team"))
+    # 2. Add Pepe
+    set("student", "Pepe")
+    print("Get student (added):", get("student"))
+    
+    # 3. Delete Pepe using tombstone
+    delete("student")
+    print("Get student (after delete):", get("student"))
+    
+    # 4. Check final team
+    print("Get final team:", get("team"))
