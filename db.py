@@ -1,37 +1,65 @@
-# The dumbest version that works
+import os
+
+DB_FILE = "db.txt"
+# Hash map / Index in memory: stores { "key": byte_offset }
+INDEX = {}
+
+def build_index():
+    """Reads the file once on startup to build the hash map index."""
+    if not os.path.exists(DB_FILE):
+        return
+    
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        while True:
+            offset = f.tell()  # Save byte position before reading the line
+            line = f.readline()
+            if not line:
+                break
+            
+            parts = line.strip().split(",", 1)
+            if len(parts) == 2:
+                key, value = parts
+                if value == "__DELETED__":
+                    INDEX.pop(key, None)  # Tombstone: remove from index
+                else:
+                    INDEX[key] = offset  # Save the latest position
+
 
 def set(key, value):
-    """Saves data at the end of the file."""
-    with open("db.txt", "a") as f:
+    """Appends data to the file and updates the hash map."""
+    with open(DB_FILE, "a", encoding="utf-8") as f:
+        offset = f.tell()  # Get current byte position
         f.write(f"{key},{value}\n")
+    
+    INDEX[key] = offset  # Update hash map
+
 
 def get(key):
-    """Reads the file line by line to find the last value of the key."""
-    result = None
-    try:
-        with open("db.txt", "r") as f:
-            for line in f:
-                k, v = line.strip().split(",", 1)
-                if k == key:
-                    result = v
-    except FileNotFoundError:
+    """Retrieves data instantly using the hash map and seek() (no full file scan)."""
+    if key not in INDEX:
         return None
     
-    # If the last thing we found was a tombstone, it means it's deleted
-    if result == "__DELETED__":
-        return None
-        
-    return result
+    offset = INDEX[key]
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        f.seek(offset)  # Jump directly to the exact byte position
+        _, value = f.readline().strip().split(",", 1)
+        return value
+
 
 def delete(key):
-    """Point 3: Deletes by simply saving a tombstone value."""
-    set(key, "__DELETED__")
+    """Deletes by writing a tombstone and removing it from the hash map."""
+    if key in INDEX:
+        with open(DB_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{key},__DELETED__\n")
+        del INDEX[key]
 
 
 # --- TEST ---
 if __name__ == "__main__":
+    build_index()  # Build index on startup
+    
     set("team", "Alejandro, Gabriel, Jorge")
-    print(get("team"))
+    print("Get team:", get("team"))
     
     delete("team")
-    print(get("team"))
+    print("Get team after delete:", get("team"))
